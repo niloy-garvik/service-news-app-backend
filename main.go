@@ -1,10 +1,12 @@
 package main
 
 import (
+	"context"
 	"log"
 	"net/http"
 
 	PostgresInstance "service-news-app-backend/Postgres_Instance"
+	schemas "service-news-app-backend/Schemas"
 	envUtil "service-news-app-backend/config"
 	"service-news-app-backend/routes" // Import the new routes package
 )
@@ -15,19 +17,15 @@ func main() {
 
 	// Create database connection
 	PostgresInstance.CreatePostgresInstance()
+	PostgresInstance.CreateDatabase()
+	schemas.CreateArticlesTable(context.Background(), PostgresInstance.GetPostgresInstance())
 
 	// Setup routes
 	r := routes.SetupRoutes()
 
 	applicationPort := envUtil.GetEnvironmentVariable("applicationPort")
 
-	log.Println("Server is starting...")
+	log.Println("Server is running at port:", applicationPort)
+	http.ListenAndServe(":"+applicationPort, r)
 
-	err := http.ListenAndServe(":"+applicationPort, r)
-
-	if err != nil {
-		log.Fatalln("There's an error with the server,", err)
-	} else {
-		log.Println("Server is running at port:", applicationPort)
-	}
 }

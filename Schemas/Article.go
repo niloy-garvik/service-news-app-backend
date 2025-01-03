@@ -4,32 +4,39 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log"
+	"service-news-app-backend/config"
+	"time"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/lib/pq"
 )
 
 type ArticleSchema struct {
-	ArticleId       string   `json:"articleId"` // UUID as string
-	Title           string   `json:"title"`
-	Publisher       string   `json:"publisher"`
-	PublicationDate string   `json:"publicationDate"` // TIMESTAMP
-	Url             string   `json:"url"`
-	Content         string   `json:"content"`
-	Summary         string   `json:"summary"`
-	Tags            []string `json:"tags"`           // -- e.g., ["Indian Army", "Kashmir"]
-	Entities        any      `json:"entities"`       // -- e.g., {"organizations": ["Indian Army"], "locations": ["Kashmir"]}
-	SentimentScore  string   `json:"sentimentScore"` // -- e.g., "Positive", "Negative", "Neutral"
-	Categories      []string `json:"categories"`     // -- e.g., ["National Security", "Conflict"]
-	ContentS3Path   string   `json:"contentS3Path"`  // -- e.g., S3 path to the full article
-	Status          string   `json:"status"`         // -- e.g., "published" or "unpublished"
-	CreatedAt       string   `json:"createdAt"`      // TIMESTAMP
-	UpdatedAt       string   `json:"updatedAt"`      // TIMESTAMP
+	ArticleId       string         `json:"articleId"` // UUID as string
+	Title           string         `json:"title"`
+	Publisher       string         `json:"publisher"`
+	PublicationDate time.Time      `json:"publicationDate"` // TIMESTAMP
+	Url             string         `json:"url"`
+	Content         string         `json:"content"`
+	Summary         string         `json:"summary"`
+	Tags            pq.StringArray `json:"tags"`           // -- e.g., ["Indian Army", "Kashmir"]
+	Entities        any            `json:"entities"`       // -- e.g., {"organizations": ["Indian Army"], "locations": ["Kashmir"]}
+	SentimentScore  string         `json:"sentimentScore"` // -- e.g., "Positive", "Negative", "Neutral"
+	Categories      pq.StringArray `json:"categories"`     // -- e.g., ["National Security", "Conflict"]
+	ContentS3Path   string         `json:"contentS3Path"`  // -- e.g., S3 path to the full article
+	Status          string         `json:"status"`         // -- e.g., "published" or "unpublished"
+	CreatedAt       time.Time      `json:"createdAt"`      // TIMESTAMP
+	UpdatedAt       time.Time      `json:"updatedAt"`      // TIMESTAMP
 }
 
+// CreateArticlesTable creates the articles table in the database
 func CreateArticlesTable(ctx context.Context, pool *pgxpool.Pool) error {
-	createTableSQL := `
-	CREATE TABLE IF NOT EXISTS articles (
+	articleTableName := config.GetEnvironmentVariable("ARTICLE_TABLE_NAME")
+
+	createTableSQL := fmt.Sprintf(`
+	CREATE TABLE IF NOT EXISTS %s (
 		article_id UUID PRIMARY KEY,
 		title TEXT NOT NULL,
 		publisher TEXT NOT NULL,
@@ -37,36 +44,41 @@ func CreateArticlesTable(ctx context.Context, pool *pgxpool.Pool) error {
 		url TEXT NOT NULL,
 		content TEXT NOT NULL,
 		summary TEXT,
-		tags JSONB,              
-		entities JSONB,           
+		tags TEXT[],              -- Changed to TEXT[] for array of tags
+		entities JSONB,           -- Keeping entities as JSONB for flexibility
 		sentiment_score VARCHAR(10), 
-		categories JSONB,         
+		categories TEXT[],         -- Changed to TEXT[] for array of categories
 		content_s3_path TEXT,     
 		status TEXT NOT NULL,      
 		created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-		updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
-	);`
+		updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+	);`, articleTableName)
 
+	// Execute the SQL command to create the table
 	_, err := pool.Exec(ctx, createTableSQL)
-	return err
-}
-
-func InsertArticleData(ctx context.Context, pool *pgxpool.Pool, article ArticleSchema) error {
-	tagsJSON, err := json.Marshal(article.Tags)
 	if err != nil {
-		return fmt.Errorf("error marshaling tags: %v", err)
+		fmt.Println("Error creating articles table: ", err)
+		return err
 	}
+
+	log.Printf("%s table created successfully or already exists\n", articleTableName)
+	return nil
+}
+func InsertArticleData(ctx context.Context, pool *pgxpool.Pool, article ArticleSchema) error {
+
+	articleTableName := config.GetEnvironmentVariable("ARTICLE_TABLE_NAME")
 
 	entitiesDataJSON, err := json.Marshal(article.Entities)
 	if err != nil {
 		return fmt.Errorf("error marshaling entities: %v", err)
 	}
 
-	insertSQL := `
-    INSERT INTO articles (article_id, title, publisher, publication_date, url, content, summary, tags, entities, sentiment_score, categories, content_s3_path, status)
-    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12);`
+	insertSQL := fmt.Sprintf(`
+    INSERT INTO %s (article_id, title, publisher, publication_date, url, content, summary, tags, entities, sentiment_score, categories, content_s3_path, status)
+    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13);`, articleTableName)
 
-	categoriesArray := pq.Array(article.Categories) // Convert categories slice to PostgreSQL array
+	// categoriesArray := pq.Array(article.Categories) // Convert categories slice to PostgreSQL array
+	// tagsArray := pq.Array(article.Tags)
 
 	_, err = pool.Exec(ctx, insertSQL,
 		article.ArticleId,
@@ -76,23 +88,26 @@ func InsertArticleData(ctx context.Context, pool *pgxpool.Pool, article ArticleS
 		article.Url,
 		article.Content,
 		article.Summary,
-		tagsJSON,               // Insert tags as JSONB
+		article.Tags,           // Insert categories as an array
 		entitiesDataJSON,       // Insert entities as JSONB
 		article.SentimentScore, // Insert sentiment score as VARCHAR
-		categoriesArray,        // Insert categories as an array
+		article.Categories,     // Insert tags as JSONB
 		article.ContentS3Path,
 		article.Status) // Insert status
 
 	return err
 }
 
+// GetArticleByID retrieves an article by its ID
 func GetArticleByID(ctx context.Context, pool *pgxpool.Pool, articleId string) (*ArticleSchema, error) {
+	articleTableName := config.GetEnvironmentVariable("ARTICLE_TABLE_NAME")
+
 	var article ArticleSchema
 
-	query := `
+	query := fmt.Sprintf(`
 	SELECT *
-	FROM articles
-	WHERE article_id = $1;`
+	FROM %s
+	WHERE article_id = $1;`, articleTableName)
 
 	err := pool.QueryRow(ctx, query, articleId).Scan(
 		&article.ArticleId,
@@ -102,10 +117,10 @@ func GetArticleByID(ctx context.Context, pool *pgxpool.Pool, articleId string) (
 		&article.Url,
 		&article.Content,
 		&article.Summary,
-		&article.Tags,
+		&article.Tags, // Scan tags as an array of strings
 		&article.Entities,
 		&article.SentimentScore,
-		pq.Array(&article.Categories), // Assuming pq is imported for array handling
+		&article.Categories, // Scan categories as an array of strings
 		&article.ContentS3Path,
 		&article.Status,
 		&article.CreatedAt,
@@ -113,13 +128,18 @@ func GetArticleByID(ctx context.Context, pool *pgxpool.Pool, articleId string) (
 	)
 
 	if err != nil {
+		if err == pgx.ErrNoRows {
+			return nil, nil // No record found, return nil for both article and error
+		}
 		return nil, fmt.Errorf("error fetching article: %v", err)
 	}
 
 	return &article, nil
 }
-
 func UpdateArticleByID(ctx context.Context, pool *pgxpool.Pool, article ArticleSchema) error {
+
+	articleTableName := config.GetEnvironmentVariable("ARTICLE_TABLE_NAME")
+
 	// Marshal tags to JSONB
 	tagsJSON, err := json.Marshal(article.Tags)
 	if err != nil {
@@ -132,8 +152,8 @@ func UpdateArticleByID(ctx context.Context, pool *pgxpool.Pool, article ArticleS
 		return fmt.Errorf("error marshaling entities: %v", err)
 	}
 
-	updateSQL := `
-    UPDATE articles
+	updateSQL := fmt.Sprintf(`
+    UPDATE %s
     SET title = $1,
         publisher = $2,
         publication_date = $3,
@@ -147,7 +167,7 @@ func UpdateArticleByID(ctx context.Context, pool *pgxpool.Pool, article ArticleS
         content_s3_path = $11,
         status = $12,
         updated_at = CURRENT_TIMESTAMP  -- Automatically set updated_at to current time
-    WHERE article_id = $13;`
+    WHERE article_id = $13;`, articleTableName)
 
 	_, err = pool.Exec(ctx, updateSQL,
 		article.Title,

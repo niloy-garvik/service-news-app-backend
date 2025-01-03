@@ -38,13 +38,14 @@ func ExtractMetaDataHandler(w http.ResponseWriter, r *http.Request) {
 		utils.SendErrorResponse(w, http.StatusInternalServerError, "openAIError", err.Error(), nil)
 		return
 	}
+	publicationDate, _ := utils.ConvertStringToTimestamp(body.PublicationDate)
 
 	// building article info struct
 	articleInfoObj := schemas.ArticleSchema{
 		ArticleId:       body.ArticleId,
 		Title:           body.Title,
 		Publisher:       body.Publisher,
-		PublicationDate: body.PublicationDate,
+		PublicationDate: publicationDate,
 		Url:             body.Url,
 		Content:         body.Content,
 		Summary:         summary,

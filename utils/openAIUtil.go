@@ -134,7 +134,7 @@ func GenerateVectorEmebeddings(input string) ([]float32, error) {
 }
 
 type Entities struct {
-	Organizations string   `json:"organizations"`
+	Organizations []string `json:"organizations"`
 	Locations     []string `json:"locations"`
 	Individuals   []string `json:"individuals"`
 }
@@ -149,39 +149,41 @@ type MetaData struct {
 // getCategories calls the OpenAI API to get categories based on the prompt
 func GetResponseFromChatGPT(ctx context.Context, content string) (*MetaData, error) {
 
+	var err error
+
 	// Create the prompt for OpenAI
-	prompt := "Extract entities from the following news article and categorize them into organizations, locations, and individuals:\n\n" + content
+	// prompt := "Extract entities from the following news article and categorize them into organizations, locations, and individuals:\n\n" + content
 
-	req := openai.CompletionRequest{
-		Model:       openai.GPT4o,
-		Prompt:      prompt,
-		MaxTokens:   50,
-		Temperature: 0.3,
-	}
-
-	// Initialize OpenAI client
-	var openAIClient *openai.Client
-
-	resp, err := openAIClient.CreateCompletion(ctx, req)
-	if err != nil {
-		return nil, err
-	}
-
-	if len(resp.Choices) == 0 {
-		return nil, errors.New("no choices returned from OpenAI")
-	}
-
-	responseFromOpenAI := strings.TrimSpace(resp.Choices[0].Text)
-
-	// {
-	// 	"sentimentScore": "Neutral",
-	// 	"categories": ["National Security", "Conflict"],
-	// 	"entities": {
-	// 		"organizations": ["Example Publisher"],
-	// 		"locations": [],
-	// 		"individuals": []
-	// 	}
+	// req := openai.CompletionRequest{
+	// 	Model:       openai.GPT4o,
+	// 	Prompt:      prompt,
+	// 	MaxTokens:   50,
+	// 	Temperature: 0.3,
 	// }
+
+	// // Initialize OpenAI client
+	// var openAIClient *openai.Client
+
+	// resp, err := openAIClient.CreateCompletion(ctx, req)
+	// if err != nil {
+	// 	return nil, err
+	// }
+
+	// if len(resp.Choices) == 0 {
+	// 	return nil, errors.New("no choices returned from OpenAI")
+	// }
+
+	// responseFromOpenAI := strings.TrimSpace(resp.Choices[0].Text)
+
+	responseFromOpenAI := `{
+		"sentimentScore": "Neutral",
+		"categories": ["National Security", "Conflict"],
+		"entities": {
+			"organizations": ["Example Publisher"],
+			"locations": [],
+			"individuals": []
+		}
+	}`
 
 	var resultData *MetaData
 
@@ -198,28 +200,28 @@ func GenerateSummary(ctx context.Context, content string) (string, error) {
 
 	// Create the prompt for OpenAI
 	prompt := "Extract entities from the following news article and categorize them into organizations, locations, and individuals:\n\n" + content
-	req := openai.CompletionRequest{
-		Model:       openai.GPT4o,
-		Prompt:      prompt,
-		MaxTokens:   50,
-		Temperature: 0.3,
-	}
+	// req := openai.CompletionRequest{
+	// 	Model:       openai.GPT4o,
+	// 	Prompt:      prompt,
+	// 	MaxTokens:   50,
+	// 	Temperature: 0.3,
+	// }
 
-	// Initialize OpenAI client
-	var openAIClient *openai.Client
+	// // Initialize OpenAI client
+	// var openAIClient *openai.Client
 
-	resp, err := openAIClient.CreateCompletion(ctx, req)
-	if err != nil {
-		return "", err
-	}
+	// resp, err := openAIClient.CreateCompletion(ctx, req)
+	// if err != nil {
+	// 	return "", err
+	// }
 
-	if len(resp.Choices) == 0 {
-		return "", errors.New("no choices returned from OpenAI")
-	}
+	// if len(resp.Choices) == 0 {
+	// 	return "", errors.New("no choices returned from OpenAI")
+	// }
 
-	responseFromOpenAI := strings.TrimSpace(resp.Choices[0].Text)
+	// responseFromOpenAI := strings.TrimSpace(resp.Choices[0].Text)
 
-	return responseFromOpenAI, nil
+	return prompt, nil
 }
 
 // parseCategories attempts to parse the categories as JSON

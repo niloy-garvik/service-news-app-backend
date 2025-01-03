@@ -2,6 +2,7 @@ package postgresinstance
 
 import (
 	"context"
+	"fmt"
 	"log"
 	"service-news-app-backend/config"
 
@@ -27,7 +28,7 @@ func CreatePostgresInstance() *pgxpool.Pool {
 		log.Fatalf("Unable to create connection pool: %v", err)
 	}
 
-	defer pool.Close()
+	// defer pool.Close()
 
 	// Verify connectivity by pinging the database
 	if err := pool.Ping(context.Background()); err != nil {
@@ -41,4 +42,20 @@ func CreatePostgresInstance() *pgxpool.Pool {
 // GetRDSInstance returns the existing RDS database client instance
 func GetPostgresInstance() *pgxpool.Pool {
 	return pool
+}
+
+// CreateDatabase creates a new database for the news application
+func CreateDatabase() error {
+
+	dbName := config.GetEnvironmentVariable("NEWS_DB_NAME")
+
+	// Attempt to create the database
+	_, err := pool.Exec(context.Background(), fmt.Sprintf("CREATE DATABASE %s;", dbName))
+	if err != nil {
+		log.Printf("Database %s already exists.\n", dbName)
+		return fmt.Errorf("unable to create database: %v", err)
+	}
+
+	log.Printf("Database %s created successfully.\n", dbName)
+	return nil
 }

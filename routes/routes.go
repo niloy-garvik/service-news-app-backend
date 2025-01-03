@@ -26,7 +26,7 @@ func SetupRoutes() *chi.Mux {
 	}))
 
 	// Define API routes
-	r.Get("/fetch-news", controller.ExtractMetaDataHandler)
+	r.Post("/extract-meata-data", controller.ExtractMetaDataHandler)
 
 	return r
 }
